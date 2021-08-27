@@ -14,8 +14,8 @@ Lastly the output is written to an output file.
 - [X] Add arg parse functionality
 - [X] Add node tree building functionality
 - [X] Test with simple samle XML
-- [ ] Add node parse functionality
-- [ ] Refactor modules
+- [X] Add node parse functionality
+- [X] Refactor modules
 - [ ] Add web interface/API
 - [ ] Create rs lib & mods
 - [ ] Use FFI lib call rather than process
