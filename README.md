@@ -2,9 +2,12 @@
 
 Easily convert Word documents to DokuWiki
 
-### doc_hero
-doc_hero is a CLI application that takes a `.docx` input file and an output directory.
-It then transforms the word file into a directory tree with doku wiki formatted text files.
+### Dochero
+dochero is a CLI application that takes a `.docx` input file and an output directory.
+It reads the document as a zip archive and extracts the content of the `word/document.xml`.
+The `quick_xml` parser reads this XML file and returns an iterator of XML objects.
+Dochero reads these XML nodes and a formatted output is pushed onto the output buffer.
+Lastly the output is written to an output file.
 
 ### TODO:
 - [X] Create doc_hero project

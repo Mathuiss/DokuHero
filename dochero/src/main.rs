@@ -2,34 +2,111 @@ extern crate quick_xml;
 extern crate zip;
 
 use clap::{App, Arg};
+// use quick_xml::events::attributes::Attributes;
 use quick_xml::events::Event;
 use quick_xml::Reader;
+use std::collections::HashMap;
 use std::env::current_dir;
 use std::fs::File;
 use std::io::Read;
+use std::io::Write;
 use std::path::Path;
+use std::str;
 use zip::ZipArchive;
 
+fn write_output(location: &str, output: String) -> Result<(), std::io::Error> {
+    let mut handle = File::create(format!("{}/document.md", location).as_str())?;
+    handle.write_all(output.as_bytes())?;
+
+    return Ok(());
+}
+
+fn transform(output: &mut String, attributes: &mut HashMap<String, String>, value: &str) {
+    //  Transform can be implemented for different types like: MD, DokuWiki, MediaWiki
+    // When test is read, push current attributes
+
+    let r = attributes.get("w:val");
+
+    if r != None {
+        let style = r.unwrap().as_str();
+        match style {
+            "Title" => {
+                output.push_str(&format!("# {}\n", value));
+            }
+            "Subtitle" => {
+                output.push_str(&format!("## {}\n", value));
+            }
+            "Heading1" => {
+                output.push_str(&format!("### {}\n", value));
+            }
+            "Heading2" => {
+                output.push_str(&format!("#### {}\n", value));
+            }
+            "Heading3" => {
+                output.push_str(&format!("##### {}\n", value));
+            }
+            "TextBody" => {
+                output.push_str(&format!("{}\n", value));
+            }
+            "InternetLink" => {
+                output.push_str(&format!("[{}]\n", value));
+            }
+            _ => {}
+        }
+    }
+}
+
 fn parse(mut xml: quick_xml::Reader<&[u8]>) -> Result<String, quick_xml::Error> {
-    let mut event_counter = 0;
-    let mut output = Vec::new();
+    let mut output = String::new();
     let mut buf = Vec::new();
+    // let mut current_tag = String::new();
+    let mut current_attributes = HashMap::new();
 
     loop {
-        let xml_event = xml.read_event(&mut buf)?;
-        match xml_event {
-            Event::Start(_) => event_counter += 1,
-            Event::Text(e) => output.push(e.unescape_and_decode(&xml)?),
-            Event::Eof => break,
-            _ => println!("Unhandled XML event"),
+        let event = xml.read_event(&mut buf);
+        match event {
+            Ok(Event::Empty(ref e)) => {
+                // Unpack event and handle tag & attributes
+                let current_tag = String::from_utf8_lossy(e.name()).to_string();
+
+                // If the tag is a style tag, save the attributes to hashmap
+                if current_tag.as_str() == "w:pStyle" || current_tag.as_str() == "w:rStyle" {
+                    // println!("CURRENT TAG: {}", current_tag);
+
+                    // Only clear the current attributes after the text is read
+                    for a in e.attributes() {
+                        let attribute = a?;
+                        let key = str::from_utf8(&attribute.key)?;
+                        let r = &attribute.unescaped_value()?;
+                        let val = str::from_utf8(r)?;
+                        current_attributes
+                            .insert(String::from(key.clone()), String::from(val.clone()));
+                    }
+                }
+            }
+            Ok(Event::Text(ref e)) => {
+                // Text(e) returns the text contained within the node
+                let line = e.unescape_and_decode(&xml)?;
+                let line = line.as_str();
+
+                if !line.is_empty() {
+                    transform(&mut output, &mut current_attributes, line);
+
+                    // After text is pushed, clear current attributes
+                    &current_attributes.clear();
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(err) => return Err(err),
+            _ => continue,
         }
     }
 
-    for s in output {
-        println!("{}", s);
-    }
+    // After the output is created, pop the last `\n`
+    output.pop();
+    println!("{}", output);
 
-    return Ok(String::new());
+    return Ok(output);
 }
 
 fn locate_file(raw_input: &str) -> Result<File, std::io::Error> {
@@ -55,7 +132,7 @@ fn dir_exists(raw_input: &str) -> Result<bool, std::io::Error> {
 // Example
 // dochero -i word.docx -o /home/mathuis/Documents/location
 // dochero --input word.docx --output /home/mathuis/Documents/location
-fn main() -> Result<(), std::io::Error> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let matches = App::new("Doc Hero")
         .about("Doc Hero converts your word document to doku wiki.")
         .arg(
@@ -93,8 +170,8 @@ fn main() -> Result<(), std::io::Error> {
     input_file.read_to_string(&mut input)?; // Read file to String buffer
     let xml = Reader::from_str(input.as_str()); // Parse XML file
 
-    let output = parse(xml);
+    let output = parse(xml)?;
+    write_output(raw_output_dir, output)?;
 
-    // let document = build_document(input);
     return Ok(());
 }
